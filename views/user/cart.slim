@@ -11,10 +11,10 @@ ol
         p = product["description"]
         p = "Kostnad: #{product["price"]}"
         p = "Säljare: #{selling}"
-        form action="delete_cart_item" method="POST"
+        form action="/cart/:id/delete" method="POST"
             input type="submit" value="Ta bort"
             input type="hidden" name="product_id" value="#{product["id"]}"   
     
 p = "Total kostnad:#{total_cost}"  
-form action="buy_cart" method="POST"
+form action="/cart/delete" method="POST"
     input type="submit" value="Betala"               

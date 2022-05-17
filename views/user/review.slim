@@ -1,0 +1,8 @@
+p = currentitem
+
+form action="/review/:id/update" method="POST"
+    input type="text" name="Rubrik" placeholder="Ändra rubrik"
+    input type="text" name="Text" placeholder="Ändra text"
+    input type="text" name="Rating" placeholder="Ändra rating"
+    input type="hidden" name="product_id" value="#{prodid}"
+    input type="submit" value="Lägg ut"

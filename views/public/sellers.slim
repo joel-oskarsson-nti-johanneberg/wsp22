@@ -1,0 +1,23 @@
+h2 säljare
+
+ol
+  - seller.each do |sell|
+    li  
+        p = sell["firstname"]
+        p = sell["surname"]
+        - if !roll.empty? && roll[0]["role"] == 1
+          form action="/seller/:id/update" method="POST"
+            input type="text" name="fname" placeholder="Ändra förnamn"
+            input type="text" name="sname" placeholder="Ändra efternamn"
+            input type="hidden" name="sell_id" value="#{sell["id"]}"
+            input type="submit" value="Uppdatera säljare"
+          form action="/seller/:id/delete" method="POST"
+            input type="submit" value="Ta bort"
+            input type="hidden" name="sell_id" value="#{sell["id"]}"
+
+h3 Lägg till
+- if !roll.empty? && roll[0]["role"] == 1
+  form action="/sellers/new" method="POST"
+      input type="text" name="fname" placeholder="Förnamn"
+      input type="text" name="sname" placeholder="Efternamn"
+      input type="submit" value="Lägg till säljare"

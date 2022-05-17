@@ -18,8 +18,32 @@ get('/showlogin') do
   slim(:"public/login",locals:{currenttime:time})
 end
 
+get('/review') do
+  db = connect_to_db('db/shop.db')
+  productid = params[:product_id].to_i
+  result = db.execute("SELECT * FROM product WHERE id = ?",productid)
+  slim(:"user/review",locals:{currentitem:result,prodid:productid})
+end
+
+post('/review/:id/update') do
+  db = connect_to_db('db/shop.db')
+  productid = params[:product_id].to_i
+  title = params[:Rubrik]
+  text = params[:Text]
+  rating = params[:Rating].to_i
+  choosen = db.execute('SELECT user_id FROM reviews WHERE product_id = ?',productid).first
+  if choosen!=nil 
+    if choosen["user_id"]==session[:id]
+      db.execute('UPDATE reviews SET user_id = ?, product_id = ?, title = ?, writing = ?, rating = ?',session[:id],productid,title,text,rating)
+    end
+  else
+    db.execute('INSERT INTO reviews (user_id,product_id,title,writing,rating) VALUES (?,?,?,?,?)',session[:id],productid,title,text,rating)
+  end
+  redirect('/shop')
+end
+
 #Visa sidan för att lägga till produkt ifall man är admin.
-get('/create_item') do
+get('/shop/new') do
   db = connect_to_db('db/shop.db')
   result = db.execute("SELECT role FROM users WHERE id = ?",session[:id]).first
   if result["role"] == 1
@@ -31,7 +55,7 @@ get('/create_item') do
 end
 
 #Visa sidan för att uppdatera produkt ifall man är admin. 
-get('/edit_item') do
+get('/shop/:id/edit') do
   db = connect_to_db('db/shop.db')
   result = db.execute("SELECT role FROM users WHERE id = ?",session[:id]).first
   if result["role"] == 1
@@ -55,7 +79,17 @@ get('/shop') do
   result = db.execute("SELECT * FROM product")
   result2 = db.execute("SELECT * FROM seller")
   result3 = db.execute("SELECT * FROM users WHERE id = ?",session[:id])
-  slim(:"public/index",locals:{webshop:result,seller:result2,roll:result3})
+  result4 = db.execute("SELECT * FROM reviews")
+  result5 = db.execute("SELECT * FROM users")
+  slim(:"public/index",locals:{webshop:result,seller:result2,roll:result3,reviewer:result4,user:result5})
+end
+
+get('/sellers') do
+  db = connect_to_db('db/shop.db')
+  id = session[:id].to_i  
+  result = db.execute("SELECT * FROM seller")
+  result3 = db.execute("SELECT * FROM users WHERE id = ?",session[:id])
+  slim(:"public/sellers",locals:{seller:result,roll:result3})
 end
 
 #Visa sidan för den nuvarande användarens kundvagn.
@@ -95,18 +129,18 @@ post('/users/new') do
   username = params[:username].to_s
   password = params[:password].to_s
   password_confirm = params[:password_confirm].to_s
-  if (password == password_confirm) && username != "" && password != ""
+  if (password == password_confirm) && username != "" && password != "" && password.to_i == 0 && username.to_i == 0
     password_digest = BCrypt::Password.create(password)
     db = SQLite3::Database.new('db/shop.db')
     db.execute('INSERT INTO users (username,pwdigest,role) VALUES (?,?,?)',username,password_digest,0)
     redirect('/showlogin')
   else
-    "Lösenorden är inte samma eller rutor är tomma"
+    "Lösenorden är inte samma, rutor är tomma eller användarnamn och lösenord består endast av nummer"
   end
 end
 
 #Funktion för att lägga till en produkt i product-tabellen.
-post ('/create_item') do
+post ('/shop/') do
   db = connect_to_db('db/shop.db')
   result = db.execute("SELECT role FROM users WHERE id = ?",session[:id]).first
   if result["role"] == 1
@@ -122,8 +156,40 @@ post ('/create_item') do
   redirect('/shop')
 end
 
+#Create seller
+post ('/sellers/new') do
+  db = connect_to_db('db/shop.db')
+  sellerf = params[:fname]
+  sellers = params[:sname]
+  db.execute('INSERT INTO seller (firstname,surname) VALUES (?,?)',sellerf,sellers)
+  redirect('/sellers')
+end
+
+#Ta bort säljare
+post('/seller/:id/delete') do
+  db = connect_to_db('db/shop.db')
+  sellerid = params[:sell_id].to_i
+  items = db.execute('SELECT * FROM product WHERE seller_id = ?',sellerid)
+  db.execute('DELETE FROM product WHERE seller_id = ?',sellerid)
+  items.each do |current|
+    db.execute('DELETE FROM buy_relation WHERE product_id = ?',current["id"])
+  end
+  db.execute('DELETE FROM seller WHERE id = ?',sellerid)
+  redirect('/sellers')
+end
+
+#Uppdatera säljare
+post('/seller/:id/update') do
+  db = connect_to_db('db/shop.db')
+  sellerf = params[:fname]
+  sellers = params[:sname]
+  seller = params[:sell_id].to_i
+  db.execute('UPDATE seller SET firstname = ?, surname = ? WHERE id = ?',sellerf,sellers,seller)
+  redirect('/sellers')
+end
+
 #Funktion för att lägga till föremål i kundvagnen.
-post('/buy') do
+post('/cart/update') do
   buyid = params[:product_id].to_i
   id = session[:id].to_i
   db = SQLite3::Database.new('db/shop.db')
@@ -132,7 +198,7 @@ post('/buy') do
 end
 
 #Funktion för att ta bort ett föremål från kundvagnen.
-post('/delete_cart_item') do
+post('/cart/:id/delete') do
   usrid = session[:id].to_i
   prodid = params[:product_id].to_i
   db = SQLite3::Database.new('db/shop.db')
@@ -141,26 +207,27 @@ post('/delete_cart_item') do
 end
 
 #Funktion för att ta bort ett förmål från product-tabellen.
-post('/delete_item') do
+post('/shop/:id/delete') do
   db = connect_to_db('db/shop.db')
   result = db.execute("SELECT role FROM users WHERE id = ?",session[:id]).first
   if result["role"] == 1
     itemid = params[:product_id].to_i
     db = SQLite3::Database.new('db/shop.db')
     db.execute('DELETE FROM product WHERE id = ?',itemid)
+    db.execute('DELETE FROM buy_relation WHERE product_id = ?',itemid)
   end
   redirect('/shop')
 end
 
 #Funktion för att rensa/köpa kundvagnen
-post('/buy_cart') do
+post('/cart/delete') do
   db = SQLite3::Database.new('db/shop.db')
   db.execute('DELETE FROM buy_relation WHERE user_id = ?',session[:id])
   redirect('/shop')
 end
 
 #Funktion för att redigera data för en rad i product-tabellen.
-post('/edited') do
+post('/shop/:id/update') do
   db = connect_to_db('db/shop.db')
   result = db.execute("SELECT role FROM users WHERE id = ?",session[:id]).first
   if result["role"] == 1
